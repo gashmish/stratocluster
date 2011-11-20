@@ -1,0 +1,22 @@
+!!!
+html
+  head
+    title Sample 
+    link(rel='stylesheet', href='styles/style.css')
+    script(type='text/javascript', src='scripts/client.js')
+    script(type='text/javascript', src="scripts/clustering.js")
+    script(type='text/javascript', src="scripts/socket.io.min.js")
+    script(type='text/javascript', src="scripts/billing/elena.js")
+    script(type='text/javascript', src="scripts/billing/dima.js")
+
+    script(type='text/javascript', src="http://maps.googleapis.com/maps/api/js?sensor=false")
+    script(type='text/javascript', src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js")
+    script(type='text/javascript', src="https://github.com/downloads/harthur/clusterfck/clusterfck-0.1.js")
+
+  body(onload='start()')
+    #users
+      button#alg1 alg1 
+      br
+      button#alg2 alg2 
+      br
+    #map_canvas
