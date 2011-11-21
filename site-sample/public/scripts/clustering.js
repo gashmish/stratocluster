@@ -17,8 +17,8 @@ Clustering = {
         $("#alg2").click(function() {
             var clusters = Clustering.get_hc_clusters2(markers);
             
-            //Utils.highlight_clusters(clusters);
-            //console.log("alg2 clusters: " + clusters.length);
+            Utils.highlight_clusters(clusters);
+            console.log("alg2 clusters: " + clusters.length);
         });
 
     },
@@ -59,7 +59,7 @@ Clustering = {
             markers,
             distanse,
             clusterfck.COMPLETE_LINKAGE,
-            0.03);
+            0.01);
 
         function flatten(leave) {
             if (!leave.left)
@@ -72,7 +72,11 @@ Clustering = {
     },
 
     get_hc_clusters2: function(markers) {
-        var MAX_DISTANSE = 1;
+        var MAX_DISTANSE = 0.01;
+
+        markers.sort(function(a, b) {
+           return a.call.time - b.call.time; 
+        });
         
         var metric = function(a, b) {
             return Math.sqrt(
@@ -90,7 +94,6 @@ Clustering = {
         var head = prev;
 
         for (var i = 0; i < markers.length - 1; i++) {
-        //for (var i = 0; i < 3; i++) {
           
             prev.next = { 
                 items:     [ markers[i] ],
@@ -105,33 +108,29 @@ Clustering = {
 
         prev.next = {
             items:     [ markers[markers.length - 1] ],
-            items:     [ markers[1] ],
             prev: prev,
             num: markers.length - 1
         };
 
-        console.log(head);
-        console.log(sorted);
-       
         // unlink list from head 
         delete head.next.prev; 
+        
 
         while (true) {
             // select cluster with shortest distanse
             sorted.sort(function(a, b) {
-                return b.distanse - a.distanse;
+                return a.distanse - b.distanse;
             });
             
             var cluster = sorted[0];
 
-            if (cluster.distanse > MAX_DISTANSE) {
+            if (cluster == undefined || cluster.distanse > MAX_DISTANSE) {
                 break;
             }
             
             // get neighbour clusters 
             var left_cluster = cluster.prev; 
             var merged_cluster = cluster.next;
-            console.log(cluster);
             var right_cluster = merged_cluster.next;
             
             if (left_cluster !== undefined) {
@@ -151,7 +150,8 @@ Clustering = {
                 //update
                 cluster.distanse = right_distanse;
                 cluster.next = right_cluster;
-
+                right_cluster.prev = cluster;
+                
                 //remove merged_cluster from sorted
                 sorted.splice(sorted.indexOf(merged_cluster), 1);
             } else {
@@ -161,8 +161,9 @@ Clustering = {
                 sorted.splice(sorted.indexOf(cluster), 1);
             }
 
+
             // merge items 
-            cluster.items.concat(merged_cluster.items);
+            cluster.items = cluster.items.concat(merged_cluster.items);
         }
 
         var result = [];
@@ -171,11 +172,10 @@ Clustering = {
             result.push(head.items);
             head = head.next;
         } while (head !== undefined);
-        
-        console.log(sorted);
-        console.log(result);
 
-        return null;
+        console.log(result);
+        
+        return result;
     },
 
     /* */
