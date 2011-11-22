@@ -9,12 +9,12 @@ function start() {
     Clustering.init();
     initPanel();
     initMap();
-    initConnection();
-    //loadElena();
+    //initConnection();
+    loadElena();
 }
 
 function loadElena() {
-    elena_calls.slice(0, 15).forEach(function(item) {
+    dima_calls.forEach(function(item) {
         var call = { time: item[1] };
         
         if (item[6] != null) {
@@ -26,6 +26,11 @@ function loadElena() {
             call.lat, call.lon);
 
         addMarker(position, call);
+    });
+        
+    // Сортируем маркеры по времени, чтобы соблюдался порядок
+    markers.sort(function(a, b) {
+       return a.call.time - b.call.time; 
     });
 }
 
@@ -89,20 +94,22 @@ function initConnection() {
     socket.emit('getCalls');
 }
 
+/*
+var icon = new google.maps.MarkerImage(
+    '/images/1dot1a.gif',
+    new google.maps.Size(10, 10),
+    null,
+    null,
+    new google.maps.Size(10, 10));
+*/
+
 function addMarker(position, call) {
     //console.log("call placed: " + position);
 
-    var icon = new google.maps.MarkerImage(
-        '/images/1dot1a.gif',
-        new google.maps.Size(10, 10),
-        null,
-        null,
-        new google.maps.Size(10, 10));
-
     var marker = new google.maps.Marker({
         position : position,
-        map : map,
-        icon : icon
+        map : map
+        //icon : icon
     });
 
     marker.call = call;

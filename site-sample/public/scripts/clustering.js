@@ -1,7 +1,47 @@
+
+var MAX_TIME_DELTA = 1000 * 60 * 60;
+var MAX_DISTANSE1 = 0.02; 
+var MAX_DISTANSE2 = 0.02;
+
+/* Мектрика расстояния между двумя маркерами */
+var metric = function(a, b) {
+    return Math.sqrt(
+        Math.pow(a.call.lat - b.call.lat, 2) +
+        Math.pow(a.call.lon - b.call.lon, 2)
+    );
+};
+
+/* Центр кластера */
+var cluster_centroid = function(cluster) {
+    var centroid = {
+        call: { lon: 0, lat: 0 }
+    };
+    cluster.items.forEach(function(i) {
+        centroid.call.lon += i.call.lon;
+        centroid.call.lat += i.call.lat;
+    });
+    centroid.call.lon /= cluster.items.length;
+    centroid.call.lat /= cluster.items.length;
+    return centroid;
+}
+
+/* Расстояние между двумя максимально удаленными
+ * по времени точками входных кластеров
+ */
+var cluster_time_distanse = function(a, b) {
+    return metric(a.items[0], b.items[b.items.length - 1]);
+}
+
+/* Расстояние между центрами двух кластеров */         
+var cluster_average_distanse = function(a, b) {
+    return metric(cluster_centroid(a), cluster_centroid(b));
+}
+
+
 Clustering = {
     
     init: function () {
-        $("#alg1").click(function() {
+        $("#time").click(function() {
             var clusters = Clustering.get_time_clusters1(markers);
             Utils.highlight_clusters(clusters);
             console.log("alg1 clusters: " + clusters.length);
@@ -14,19 +54,48 @@ Clustering = {
             });
         });
 
-        $("#alg2").click(function() {
-            var clusters = Clustering.get_hc_clusters2(markers);
-            
+        $("#sub").click(function() {
+
+            var time_clusters = Clustering.get_time_clusters1(markers);
+            console.log(time_clusters);
+           
+            var sub_clusters = [];
+            time_clusters.forEach(function(time_cluster) {
+//                console.log(time_cluster.length);
+                var res = Clustering.get_sub_clusters(time_cluster);
+                console.log(res);
+                sub_clusters = sub_clusters.concat(res); 
+            });
+
+            console.log(sub_clusters); 
+            Utils.highlight_clusters(sub_clusters);
+        });
+        
+        $("#big").click(function() {
+
+            var time_clusters = Clustering.get_time_clusters1(markers);
+            console.log(time_clusters);
+           
+            var sub_clusters = [];
+            time_clusters.forEach(function(time_cluster) {
+                var res = Clustering.get_sub_clusters(time_cluster);
+                sub_clusters = sub_clusters.concat(res); 
+            });
+            console.log(sub_clusters); 
+
+            //var sub_clusters = Clustering.get_sub_clusters(markers);
+            //console.log(sub_clusters); 
+            //Utils.highlight_clusters(sub_clusters);
+
+            var clusters = Clustering.get_global_clusters(sub_clusters); 
             Utils.highlight_clusters(clusters);
+            console.log(clusters); 
             console.log("alg2 clusters: " + clusters.length);
         });
 
     },
 
     get_time_clusters1: function(markers) {
-        //var max_time_delta = 1000 * 60 * 60;
-        var max_time_delta = 5000;
-
         var clusters = [];
         var cluster = [];
 
@@ -36,7 +105,7 @@ Clustering = {
             
             cluster.push(current);
 
-            if (next.call.time - current.call.time > max_time_delta) {
+            if (next.call.time - current.call.time > MAX_TIME_DELTA) {
                 clusters.push(cluster);
                 cluster = [];
             }
@@ -47,84 +116,50 @@ Clustering = {
         return clusters;
     },
 
-    get_hc_clusters: function(markers) {
-        var distanse = function(a, b) {
-            return Math.sqrt(
-                Math.pow(a.call.lat - b.call.lat, 2) +
-                Math.pow(a.call.lon - b.call.lon, 2)
-            );
-        };
 
-        var results = clusterfck.hcluster(
-            markers,
-            distanse,
-            clusterfck.COMPLETE_LINKAGE,
-            0.01);
-
-        function flatten(leave) {
-            if (!leave.left)
-                return [ leave.canonical ];
-            else
-                return flatten(leave.left).concat(flatten(leave.right));
-        }
-
-        return results.map(function(root) { return flatten(root) });
-    },
-
-    get_hc_clusters2: function(markers) {
-        var MAX_DISTANSE = 0.01;
-
-        markers.sort(function(a, b) {
-           return a.call.time - b.call.time; 
-        });
+    get_sub_clusters: function(markers) {
         
-        var metric = function(a, b) {
-            return Math.sqrt(
-                Math.pow(a.call.lat - b.call.lat, 2) +
-                Math.pow(a.call.lon - b.call.lon, 2)
-            );
-        };
-      
-        /* clusters array sorted by distanse (descending) */
+        /*
+         * Подготовка данных
+         */
+
+        // Кластеры, упорядоченые по удаленности от последующего кластера-соседа 
         var sorted = [];
 
-        /* fill linked-list and sorted array */
-        
+        // Заполняем последовательный связный список кластеров 'head' и массив 'sorted' 
         var prev = {};
         var head = prev;
-
         for (var i = 0; i < markers.length - 1; i++) {
-          
             prev.next = { 
                 items:     [ markers[i] ],
                 distanse:  metric(markers[i], markers[i + 1]),
                 prev:      prev,
                 num:       i
             };
-
             sorted.push(prev.next);
             prev = prev.next;
         }
-
         prev.next = {
             items:     [ markers[markers.length - 1] ],
             prev: prev,
             num: markers.length - 1
         };
-
-        // unlink list from head 
         delete head.next.prev; 
-        
 
+
+        /*
+         * Алгоритм
+         */
+
+        var cluster_distanse = cluster_average_distanse;
+        
         while (true) {
             // select cluster with shortest distanse
             sorted.sort(function(a, b) {
                 return a.distanse - b.distanse;
             });
-            
             var cluster = sorted[0];
-
-            if (cluster == undefined || cluster.distanse > MAX_DISTANSE) {
+            if (cluster == undefined || cluster.distanse > MAX_DISTANSE1) {
                 break;
             }
             
@@ -134,18 +169,23 @@ Clustering = {
             var right_cluster = merged_cluster.next;
             
             if (left_cluster !== undefined) {
-                var left_distanse = metric(
-                    left_cluster.items[0],
-                    merged_cluster.items[merged_cluster.items.length - 1]);
-
+                var left_distanse =
+                    cluster_distanse(left_cluster, merged_cluster);
+                
+                //var left_distanse = metric(
+                //    left_cluster.items[0],
+                //    merged_cluster.items[merged_cluster.items.length - 1]);
+                
                 left_cluster.distanse = left_distanse;
             } 
 
             if (right_cluster !== undefined) {
-                 
-                var right_distanse = metric(
-                    cluster.items[0],
-                    right_cluster.items[right_cluster.items.length - 1]);
+                var right_distanse =
+                    cluster_distanse(cluster, right_cluster);
+
+                //var right_distanse = metric(
+                //    cluster.items[0],
+                //    right_cluster.items[right_cluster.items.length - 1]);
 
                 //update
                 cluster.distanse = right_distanse;
@@ -161,11 +201,11 @@ Clustering = {
                 sorted.splice(sorted.indexOf(cluster), 1);
             }
 
-
             // merge items 
             cluster.items = cluster.items.concat(merged_cluster.items);
         }
 
+        // Подготавливаем результат
         var result = [];
         head = head.next;
         do {
@@ -173,22 +213,40 @@ Clustering = {
             head = head.next;
         } while (head !== undefined);
 
-        console.log(result);
-        
         return result;
     },
-
-    /* */
-    get_inner_clusters: function(set) {
-        var clusters = [];
-
-        set.forEach(function(e) { clusters.push(e); });
+    
+    get_global_clusters: function(sub_clusters) {
         
-        var matrix = [];
+        var clusters = [];
+        sub_clusters.forEach(function(cluster) {
+           clusters.push( { items: cluster } );
+        });
 
-        function distanse(a, b) {
-            
+        var tree = clusterfck.hcluster(
+            clusters,
+            cluster_average_distanse, 
+            clusterfck.COMPLETE_LINKAGE,
+            MAX_DISTANSE2);
+
+        function flatten(leave) {
+            if (!leave.left)
+                return [ leave.canonical ];
+            else
+                return flatten(leave.left).concat(flatten(leave.right));
         }
+
+        var big_clusters = tree.map(function(root) { return flatten(root) });
+            
+        var results = [];        
+        big_clusters.forEach(function(big) {
+            var cluster = [];
+            big.forEach(function(c) {
+                cluster = cluster.concat(c.items);
+            });
+            results.push(cluster);
+        }); 
+        return results;
     }
 };
 
